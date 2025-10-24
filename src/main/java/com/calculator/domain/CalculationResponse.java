@@ -1,13 +1,7 @@
 package com.calculator.domain;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 @Schema(description = "Response object containing calculation result")
 public class CalculationResponse {
     
@@ -29,6 +23,9 @@ public class CalculationResponse {
     @Schema(description = "Message describing the result or error", example = "Calculation successful")
     private String message;
 
+    public CalculationResponse() {
+    }
+
     public CalculationResponse(Double number1, Double number2, String operation, Double result) {
         this.number1 = number1;
         this.number2 = number2;
@@ -36,5 +33,62 @@ public class CalculationResponse {
         this.result = result;
         this.success = true;
         this.message = "Calculation successful";
+    }
+    
+    public CalculationResponse(Double number1, Double number2, String operation, Double result, boolean success, String message) {
+        this.number1 = number1;
+        this.number2 = number2;
+        this.operation = operation;
+        this.result = result;
+        this.success = success;
+        this.message = message;
+    }
+
+    public Double getNumber1() {
+        return number1;
+    }
+
+    public void setNumber1(Double number1) {
+        this.number1 = number1;
+    }
+
+    public Double getNumber2() {
+        return number2;
+    }
+
+    public void setNumber2(Double number2) {
+        this.number2 = number2;
+    }
+
+    public String getOperation() {
+        return operation;
+    }
+
+    public void setOperation(String operation) {
+        this.operation = operation;
+    }
+
+    public Double getResult() {
+        return result;
+    }
+
+    public void setResult(Double result) {
+        this.result = result;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 }
