@@ -121,7 +121,7 @@ jobs:
       
       # STEP 4.7: Print image details
       - name: Image digest
-        run: echo ${{ steps.meta.outputs.tags }}
+        run: echo "${{ steps.meta.outputs.tags }}"
 
   # ============================================
   # JOB 3: SECURITY SCAN (Optional but recommended)
