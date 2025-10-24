@@ -20,8 +20,8 @@ public class OpenAPIConfig {
         localServer.setDescription("Local Development Server");
 
         Server prodServer = new Server();
-        prodServer.setUrl("https://your-production-url.com");
-        prodServer.setDescription("Production Server");
+        prodServer.setUrl("https://calculator-service-production.up.railway.app");
+        prodServer.setDescription("Production Server (Railway)");
 
         Contact contact = new Contact();
         contact.setName("Calculator Service Team");
