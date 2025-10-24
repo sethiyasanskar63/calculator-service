@@ -15,13 +15,13 @@ public class OpenAPIConfig {
 
     @Bean
     public OpenAPI calculatorOpenAPI() {
-        Server localServer = new Server();
-        localServer.setUrl("http://localhost:8080");
-        localServer.setDescription("Local Development Server");
-
         Server prodServer = new Server();
         prodServer.setUrl("https://calculator-service-production.up.railway.app");
         prodServer.setDescription("Production Server (Railway)");
+
+        Server localServer = new Server();
+        localServer.setUrl("http://localhost:8080");
+        localServer.setDescription("Local Development Server");
 
         Contact contact = new Contact();
         contact.setName("Calculator Service Team");
@@ -40,6 +40,6 @@ public class OpenAPIConfig {
 
         return new OpenAPI()
                 .info(info)
-                .servers(List.of(localServer, prodServer));
+                .servers(List.of(prodServer, localServer));
     }
 }
