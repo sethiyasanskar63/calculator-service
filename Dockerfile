@@ -1,4 +1,24 @@
-# Build stage - use the JAR that's already built locally
+# Multi-stage build for Railway deployment
+# Stage 1: Build the application
+FROM eclipse-temurin:21-jdk-alpine AS builder
+
+WORKDIR /build
+
+# Copy Maven wrapper and pom.xml
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
+
+# Download dependencies (cached layer)
+RUN ./mvnw dependency:go-offline
+
+# Copy source code
+COPY src src
+
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+# Stage 2: Runtime image
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
@@ -6,8 +26,8 @@ WORKDIR /app
 # Create non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
 
-# Copy the pre-built JAR file
-COPY --chown=spring:spring target/*.jar app.jar
+# Copy the JAR from builder stage
+COPY --from=builder --chown=spring:spring /build/target/*.jar app.jar
 
 # Switch to non-root user
 USER spring:spring
