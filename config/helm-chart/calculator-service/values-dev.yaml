@@ -1,0 +1,82 @@
+# Development Environment Configuration
+# Used for local development and testing with Minikube
+
+replicaCount: 1  # Single replica for dev
+
+image:
+  repository: calculator-service
+  pullPolicy: Never  # Use local images
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: NodePort  # NodePort for Minikube
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false  # Disable ingress for dev
+  className: ""
+  annotations: {}
+  hosts:
+    - host: calculator.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  springProfilesActive: "dev"
+  serverPort: "8080"
+  logLevel: "DEBUG"
+
+# Health check configuration
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 20
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3

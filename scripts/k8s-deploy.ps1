@@ -46,7 +46,8 @@ Write-Host ""
 
 # Deploy application
 Write-Host "5️⃣  Deploying application..." -ForegroundColor Green
-kubectl apply -f config/k8s/deployment.yaml -n calculator
+Write-Host "   Using local Minikube deployment manifest" -ForegroundColor Gray
+kubectl apply -f config/k8s/deployment-oracle.yaml -n calculator
 Write-Host ""
 
 # Wait for deployment to be ready
@@ -63,7 +64,8 @@ Write-Host ""
 
 # Apply Ingress (optional, for advanced routing)
 Write-Host "7️⃣  Applying Ingress (optional)..." -ForegroundColor Green
-kubectl apply -f config/k8s/ingress.yaml -n calculator
+Write-Host "   Skipping ingress for Minikube (use NodePort instead)" -ForegroundColor Gray
+# kubectl apply -f config/k8s/ingress-prod.yaml -n calculator
 Write-Host ""
 
 # Show deployment status

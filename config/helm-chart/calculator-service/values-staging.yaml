@@ -1,0 +1,112 @@
+# Staging Environment Configuration
+# Pre-production environment for testing on Oracle Cloud
+
+replicaCount: 2  # 2 replicas for staging
+
+image:
+  repository: REPLACE_WITH_YOUR_REGION.ocir.io/REPLACE_WITH_YOUR_TENANCY/calculator-service
+  pullPolicy: Always  # Always pull from OCI Registry
+  tag: "staging"
+
+imagePullSecrets:
+  - name: oci-registry-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "calculator-sa"
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/actuator/prometheus"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP  # Internal service
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: staging-calculator.yourdomain.com  # Replace with your domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: calculator-staging-tls
+      hosts:
+        - staging-calculator.yourdomain.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false  # Manual scaling for staging
+
+nodeSelector:
+  kubernetes.io/arch: arm64  # Oracle Cloud Always Free tier uses ARM
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - calculator-service
+          topologyKey: kubernetes.io/hostname
+
+# Application configuration
+config:
+  springProfilesActive: "staging"
+  serverPort: "8080"
+  logLevel: "INFO"
+
+# Health check configuration
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 45
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3

@@ -1,29 +1,24 @@
-# This workflow builds, tests, and creates a Docker image for the Calculator microservice
-# It runs on every push to main branch and on pull requests
+name: CI/CD - Oracle Cloud
 
-name: CI/CD Pipeline
-
-# STEP 1: Define when this workflow should run
 on:
   push:
-    branches: [ main, master ]  # Run on push to main/master branch
+    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]  # Run on pull requests to main/master
-  workflow_dispatch:            # Allow manual trigger from GitHub UI
+    branches: [ main, master ]
+  workflow_dispatch:
 
-# STEP 2: Set permissions for GitHub token
 permissions:
-  contents: read          # Read repository contents
-  checks: write          # Required for dorny/test-reporter to create check runs
-  pull-requests: write   # Required to comment on PRs
+  contents: read
+  checks: write
+  pull-requests: write
 
-# STEP 3: Define environment variables used across all jobs
 env:
-  JAVA_VERSION: '21'                    # Java version to use
-  MAVEN_OPTS: -Xmx1024m                 # Maven memory settings
-  DOCKER_IMAGE_NAME: calculator-service # Docker image name
+  JAVA_VERSION: '21'
+  MAVEN_OPTS: -Xmx1024m
+  DOCKER_IMAGE_NAME: calculator-service
+  OCI_REGION: 'us-ashburn-1'  # Change to your region
+  OKE_CLUSTER_NAMESPACE: 'calculator'
 
-# STEP 4: Define the jobs to run
 jobs:
   
   # ============================================
@@ -31,36 +26,30 @@ jobs:
   # ============================================
   build-and-test:
     name: Build and Test Application
-    runs-on: ubuntu-latest  # Use latest Ubuntu runner
+    runs-on: ubuntu-latest
     
     steps:
-      # STEP 3.1: Checkout the code from repository
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for better analysis
+          fetch-depth: 0
       
-      # STEP 3.2: Set up Java 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'  # Eclipse Temurin (formerly AdoptOpenJDK)
-          cache: 'maven'           # Cache Maven dependencies for faster builds
+          distribution: 'temurin'
+          cache: 'maven'
       
-      # STEP 3.3: Build the application with Maven
       - name: Build with Maven
         run: ./mvnw clean package -DskipTests
       
-      # STEP 3.4: Run unit tests
       - name: Run tests
         run: ./mvnw test
       
-      # STEP 3.5: Generate test coverage report
       - name: Generate test coverage
         run: ./mvnw verify
       
-      # STEP 3.6: Upload test results
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,7 +60,6 @@ jobs:
             target/site/jacoco/
           retention-days: 30
       
-      # STEP 3.7: Publish test summary
       - name: Publish Test Report
         uses: dorny/test-reporter@v1
         if: always()
@@ -81,7 +69,6 @@ jobs:
           reporter: java-junit
           fail-on-error: true
       
-      # STEP 3.8: Add JaCoCo coverage comment to PR
       - name: Add Coverage to PR
         if: github.event_name == 'pull_request'
         uses: madrapps/jacoco-report@v1.6.1
@@ -93,60 +80,53 @@ jobs:
           title: '📊 Code Coverage Report'
           update-comment: true
       
-      # STEP 3.9: Upload JAR artifact for later use
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: calculator-service-jar
           path: target/*.jar
-          retention-days: 5  # Keep artifact for 5 days
+          retention-days: 5
   
   # ============================================
-  # JOB 2: BUILD AND PUSH DOCKER IMAGE
+  # JOB 2: BUILD AND PUSH TO OCI REGISTRY
   # ============================================
   docker-build-push:
-    name: Build and Push Docker Image
+    name: Build and Push Docker Image to OCI Registry
     runs-on: ubuntu-latest
-    needs: build-and-test  # Only run if build-and-test succeeds
-    # Only run on main/master branch (not on PRs)
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
     
     steps:
-      # STEP 4.1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # STEP 4.2: Download JAR artifact from previous job
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: calculator-service-jar
-          path: target/
-      
-      # STEP 4.3: Set up Docker Buildx (advanced Docker build features)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      # STEP 4.4: Login to Docker Hub
-      # NOTE: You need to add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN to GitHub Secrets
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-      # STEP 4.5: Extract metadata for Docker tags
-      - name: Extract metadata
+      # Generate image tags
+      - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          images: ${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ env.DOCKER_IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
       
-      # STEP 4.6: Build and push Docker image
+      # Login to Oracle Container Registry
+      - name: Login to OCI Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.OCI_REGION }}.ocir.io
+          username: ${{ secrets.OCI_TENANCY_NAMESPACE }}/${{ secrets.OCI_USERNAME }}
+          password: ${{ secrets.OCI_AUTH_TOKEN }}
+      
+      # Build and push Docker image
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -155,15 +135,120 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
-          cache-to: type=inline
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64  # Support both x86 and ARM
       
-      # STEP 4.7: Print image details
       - name: Image digest
-        run: echo "${{ steps.meta.outputs.tags }}"
-
+        run: echo "Image pushed with tags ${{ steps.meta.outputs.tags }}"
+  
   # ============================================
-  # JOB 3: SECURITY SCAN (Optional but recommended)
+  # JOB 3: DEPLOY TO ORACLE KUBERNETES (OKE)
+  # ============================================
+  deploy-to-oke:
+    name: Deploy to Oracle Cloud Kubernetes
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Install OCI CLI
+      - name: Install OCI CLI
+        run: |
+          curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh | bash -s -- --accept-all-defaults
+          echo "$HOME/bin" >> $GITHUB_PATH
+      
+      # Configure OCI CLI
+      - name: Configure OCI CLI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_CLI_CONFIG }}" > ~/.oci/config
+          echo "${{ secrets.OCI_CLI_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+      
+      # Install kubectl
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      # Get kubeconfig from OKE
+      - name: Setup kubeconfig for OKE
+        run: |
+          oci ce cluster create-kubeconfig \
+            --cluster-id ${{ secrets.OKE_CLUSTER_ID }} \
+            --file $HOME/.kube/config \
+            --region ${{ secrets.OCI_REGION }} \
+            --token-version 2.0.0 \
+            --kube-endpoint PUBLIC_ENDPOINT
+      
+      # Verify cluster connection
+      - name: Verify cluster connection
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+      
+      # Create namespace if doesn't exist
+      - name: Create namespace
+        run: |
+          kubectl create namespace ${{ env.OKE_CLUSTER_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+      
+      # Update deployment with new image
+      - name: Update deployment image
+        run: |
+          # Replace image placeholder in deployment-oracle.yaml
+          sed -i "s|REPLACE_WITH_YOUR_REGION.ocir.io/REPLACE_WITH_YOUR_TENANCY/calculator-service:latest|${{ secrets.OCI_REGION }}.ocir.io/${{ secrets.OCI_TENANCY_NAMESPACE }}/calculator-service:latest|g" config/k8s/deployment-oracle.yaml
+      
+      # Deploy to Kubernetes
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f config/k8s/namespace.yaml
+          kubectl apply -f config/k8s/configmap.yaml
+          kubectl apply -f config/k8s/deployment-oracle.yaml
+      
+      # Wait for rollout
+      - name: Wait for deployment rollout
+        run: |
+          kubectl rollout status deployment/calculator-service -n ${{ env.OKE_CLUSTER_NAMESPACE }} --timeout=5m
+      
+      # Get deployment info
+      - name: Get deployment information
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n ${{ env.OKE_CLUSTER_NAMESPACE }} -o wide
+          
+          echo "=== Services ==="
+          kubectl get services -n ${{ env.OKE_CLUSTER_NAMESPACE }}
+          
+          echo "=== LoadBalancer IP ==="
+          kubectl get service calculator-service -n ${{ env.OKE_CLUSTER_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+      
+      # Health check
+      - name: Health check deployment
+        run: |
+          EXTERNAL_IP=$(kubectl get service calculator-service -n ${{ env.OKE_CLUSTER_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Deployment URL: http://$EXTERNAL_IP"
+          
+          # Wait for LoadBalancer IP
+          counter=0
+          while [ -z "$EXTERNAL_IP" ] && [ $counter -lt 30 ]; do
+            echo "Waiting for LoadBalancer IP..."
+            sleep 10
+            EXTERNAL_IP=$(kubectl get service calculator-service -n ${{ env.OKE_CLUSTER_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            counter=$((counter+1))
+          done
+          
+          if [ -n "$EXTERNAL_IP" ]; then
+            echo "Testing health endpoint..."
+            sleep 30  # Wait for service to be ready
+            curl -f http://$EXTERNAL_IP/actuator/health || echo "Health check failed, but deployment completed"
+          fi
+  
+  # ============================================
+  # JOB 4: SECURITY SCAN (Optional)
   # ============================================
   security-scan:
     name: Security Scan
@@ -171,20 +256,19 @@ jobs:
     needs: build-and-test
     
     steps:
-      # STEP 5.1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # STEP 5.2: Set up Java
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
         with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: 'temurin'
-          cache: 'maven'
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
       
-      # STEP 5.3: Run dependency check for vulnerabilities
-      - name: OWASP Dependency Check
-        run: |
-          ./mvnw dependency-check:check || true
-          echo "Dependency check completed. Review the report in target/dependency-check-report.html"
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'

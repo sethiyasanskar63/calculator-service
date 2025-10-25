@@ -1,0 +1,115 @@
+# Production Environment Configuration
+# Production deployment on Oracle Cloud Kubernetes (OKE)
+
+replicaCount: 2  # Minimum 2 replicas for HA
+
+image:
+  repository: REPLACE_WITH_YOUR_REGION.ocir.io/REPLACE_WITH_YOUR_TENANCY/calculator-service
+  pullPolicy: Always  # Always pull latest from OCI Registry
+  tag: "latest"
+
+imagePullSecrets:
+  - name: oci-registry-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "calculator-sa"
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/actuator/prometheus"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP  # Behind ingress
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"  # Rate limiting
+  hosts:
+    - host: calculator.yourdomain.com  # Replace with your domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: calculator-prod-tls
+      hosts:
+        - calculator.yourdomain.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false  # Keep false for Oracle Free Tier (limited resources)
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector:
+  kubernetes.io/arch: arm64  # Oracle Cloud Always Free tier uses ARM
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:  # Hard requirement for HA
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - calculator-service
+        topologyKey: kubernetes.io/hostname
+
+# Application configuration
+config:
+  springProfilesActive: "prod"
+  serverPort: "8080"
+  logLevel: "WARN"  # Production logging
+
+# Health check configuration - more conservative for production
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
