@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: calculator-config
+  namespace: calculator
+data:
+  # Application configuration
+  application.properties: |
+    spring.application.name=calculator-service
+    server.port=8080
+    management.endpoints.web.exposure.include=health,info,metrics
+    management.endpoint.health.show-details=always
+    
+  # Logging configuration
+  log-level: "INFO"
+  
+  # Feature flags
+  feature.advanced-math: "true"
+  feature.history: "false"
