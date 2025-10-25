@@ -50,11 +50,32 @@ jobs:
       - name: Run tests
         run: ./mvnw test
       
-      # STEP 3.5: Generate test coverage report (optional)
+      # STEP 3.5: Generate test coverage report
       - name: Generate test coverage
         run: ./mvnw verify
       
-      # STEP 3.6: Upload JAR artifact for later use
+      # STEP 3.6: Upload test results
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+          retention-days: 30
+      
+      # STEP 3.7: Publish test summary
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Maven Tests
+          path: target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: true
+      
+      # STEP 3.8: Upload JAR artifact for later use
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
