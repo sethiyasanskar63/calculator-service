@@ -11,13 +11,19 @@ on:
     branches: [ main, master ]  # Run on pull requests to main/master
   workflow_dispatch:            # Allow manual trigger from GitHub UI
 
-# STEP 2: Define environment variables used across all jobs
+# STEP 2: Set permissions for GitHub token
+permissions:
+  contents: read          # Read repository contents
+  checks: write          # Required for dorny/test-reporter to create check runs
+  pull-requests: write   # Required to comment on PRs
+
+# STEP 3: Define environment variables used across all jobs
 env:
   JAVA_VERSION: '21'                    # Java version to use
   MAVEN_OPTS: -Xmx1024m                 # Maven memory settings
   DOCKER_IMAGE_NAME: calculator-service # Docker image name
 
-# STEP 3: Define the jobs to run
+# STEP 4: Define the jobs to run
 jobs:
   
   # ============================================
